@@ -1,0 +1,222 @@
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:batch="http://www.springframework.org/schema/batch" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/batch
+		http://www.springframework.org/schema/batch/spring-batch-3.0.xsd
+		http://www.springframework.org/schema/beans 
+		http://www.springframework.org/schema/beans/spring-beans-4.0.xsd">
+
+    <import resource="classpath:context-datasource.xml"/>
+
+    <bean id="jobRepository" class="org.springframework.batch.core.repository.support.MapJobRepositoryFactoryBean"/>
+
+    <bean id="jobLauncher" class="org.springframework.batch.core.launch.support.SimpleJobLauncher">
+        <property name="jobRepository" ref="jobRepository"/>
+    </bean>
+
+    <bean id="flatFileItemReader" class="org.springframework.batch.item.file.FlatFileItemReader" scope="step">
+        <property name="resource" value="file:#{jobParameters['file']}"/>
+        <property name="lineMapper">
+            <bean class="org.springframework.batch.item.file.mapping.DefaultLineMapper">
+                <property name="fieldSetMapper">
+                    <bean class="com.diego.springbatch.model.FieldSetMapperConverter"/>
+                </property>
+                <property name="lineTokenizer">
+                    <bean class="org.springframework.batch.item.file.transform.FixedLengthTokenizer">
+                        <property name="names" value="productName,price, state,description,quantity"/>
+                        <property name="columns" value="1-8,9-10,11,12-23,24-27"/>
+                    </bean>
+                </property>
+            </bean>
+        </property>
+    </bean>
+
+    <bean id="flatFileItemWriter" class="org.springframework.batch.item.file.FlatFileItemWriter"
+          scope="step">
+        <property name="resource"
+                  value="file:#{jobParameters['output']}/files.processed#{stepExecutionContext[fromId]}-#{stepExecutionContext[toId]}.xml"/>
+        <property name="appendAllowed" value="true"/>
+        <property name="lineAggregator">
+            <bean class="org.springframework.batch.item.file.transform.DelimitedLineAggregator">
+                <property name="delimiter" value="-"/>
+                <property name="fieldExtractor">
+                    <bean
+                            class="org.springframework.batch.item.file.transform.BeanWrapperFieldExtractor">
+                        <property name="names" value="productName, price, state, description, quantity"/>
+                    </bean>
+                </property>
+            </bean>
+        </property>
+    </bean>
+
+
+    <bean id="xmlItemWriter" class="org.springframework.batch.item.xml.StaxEventItemWriter" scope="step">
+
+        <property name="resource" value="file:#{jobParameters['output']}"/>
+        <property name="rootTagName" value="Prodotti"/>
+        <property name="marshaller">
+            <bean class="org.springframework.oxm.jaxb.Jaxb2Marshaller">
+                <property name="classesToBeBound">
+                    <list>
+                        <value>com.diego.springbatch.model.Prodotto</value>
+                    </list>
+                </property>
+            </bean>
+        </property>
+    </bean>
+    <bean id="xmlItemWriterLetturaDB" class="org.springframework.batch.item.xml.StaxEventItemWriter" scope="step">
+
+        <property name="resource" value="file:#{jobParameters['output']}"/>
+        <property name="rootTagName" value="Prodotti"/>
+        <property name="marshaller">
+            <bean class="org.springframework.oxm.jaxb.Jaxb2Marshaller">
+                <property name="classesToBeBound">
+                    <list>
+                        <value>com.diego.springbatch.model.Prodotto</value>
+                    </list>
+                </property>
+            </bean>
+        </property>
+    </bean>
+
+    <bean id="xmlItemReader" class="org.springframework.batch.item.xml.StaxEventItemReader" scope="step">
+        <property name="resource" value="file:#{jobParameters['file']}"/>
+        <property name="fragmentRootElementName" value="Prodotto"/>
+        <property name="unmarshaller">
+            <bean class="org.springframework.oxm.jaxb.Jaxb2Marshaller">
+                <property name="classesToBeBound">
+                    <list>
+                        <value>com.diego.springbatch.model.Prodotto</value>
+                    </list>
+                </property>
+            </bean>
+        </property>
+    </bean>
+
+    <bean id="flatFileItemReaderSplit" class="org.springframework.batch.item.file.FlatFileItemReader" scope="step">
+        <property name="resource" value="file:#{jobParameters['file']}"/>
+        <property name="maxItemCount" value="1"/>
+        <property name="lineMapper">
+            <bean class="org.springframework.batch.item.file.mapping.DefaultLineMapper">
+                <property name="fieldSetMapper">
+                    <bean class="com.diego.springbatch.model.FieldSetMapperConverter"/>
+                </property>
+                <property name="lineTokenizer">
+                    <bean class="org.springframework.batch.item.file.transform.FixedLengthTokenizer">
+                        <property name="names" value="productName,price, state,description,quantity"/>
+                        <property name="columns" value="1-8,9-10,11,12-23,24-27"/>
+                    </bean>
+                </property>
+            </bean>
+        </property>
+    </bean>
+
+
+    <bean id="databaseItemWriter" class="org.springframework.batch.item.database.JdbcBatchItemWriter">
+        <property name="dataSource" ref="dataSource"/>
+        <property name="sql">
+            <value>
+                <![CDATA[
+	            	insert into PRODOTTI(PRODUCT_NAME, PRICE, STATE , DESCRIPTION, QUANTITY)
+					values (?, ?, ?, ? ,?)
+	            ]]>
+            </value>
+        </property>
+
+        <property name="ItemPreparedStatementSetter">
+            <bean class="com.diego.springbatch.ProductResultItemPreparedStatementSetter"/>
+        </property>
+    </bean>
+
+    <bean id="databaseItemWriterUpdate" class="org.springframework.batch.item.database.JdbcBatchItemWriter">
+        <property name="dataSource" ref="dataSource"/>
+        <property name="sql">
+            <value>
+                <![CDATA[
+	            	update PRODOTTI set state = true where state = ?
+	            ]]>
+            </value>
+        </property>
+        <property name="ItemPreparedStatementSetter">
+            <bean class="com.diego.springbatch.ProductUpdateParameterSetter"/>
+        </property>
+    </bean>
+
+    <bean id="databaseItemReader"
+          class="org.springframework.batch.item.database.JdbcCursorItemReader">
+        <property name="dataSource" ref="dataSource"/>
+        <property name="sql">
+            <value>
+                <![CDATA[
+	               select * from PRODOTTI WHERE state = false
+	            ]]>
+            </value>
+        </property>
+        <property name="rowMapper">
+            <bean class="com.diego.springbatch.model.ItemRowMapper"/>
+        </property>
+    </bean>
+
+    <bean id="itemProcessor" class="com.diego.springbatch.ProductResultItemProcessor"/>
+
+    <bean id="transactionManager" class="org.springframework.batch.support.transaction.ResourcelessTransactionManager"/>
+
+    <bean id="rangePartitioner" class="com.diego.springbatch.model.RangePartitioner"/>
+
+    <bean id="taskExecutor" class="org.springframework.core.task.SimpleAsyncTaskExecutor"/>
+
+    <batch:job id="partitionJob">
+        <batch:step id="step4">
+            <partition step="slave" partitioner="rangePartitioner">
+                <handler grid-size="6" task-executor="taskExecutor"/>
+                <batch:tasklet transaction-manager="transactionManager">
+                    <batch:chunk reader="flatFileItemReaderSplit" writer="flatFileItemWriter"
+                                 commit-interval="1"/>
+                </batch:tasklet>
+            </partition>
+        </batch:step>
+    </batch:job>
+
+    <step id="slave" xmlns="http://www.springframework.org/schema/batch">
+        <tasklet>
+            <chunk reader="flatFileItemReaderSplit" writer="flatFileItemWriter"
+                   processor="itemProcessor" commit-interval="1"/>
+        </tasklet>
+    </step>
+
+    <batch:job id="txtToxmlJob">
+        <batch:step id="step3">
+            <batch:tasklet transaction-manager="transactionManager">
+                <batch:chunk reader="flatFileItemReader" writer="xmlItemWriter"
+                             commit-interval="10"/>
+            </batch:tasklet>
+        </batch:step>
+    </batch:job>
+
+    <batch:job id="dbupdateJob">
+        <batch:step id="step5">
+            <batch:tasklet transaction-manager="transactionManager">
+                <batch:chunk reader="databaseItemReader" writer="databaseItemWriterUpdate"
+                             processor="itemProcessor" commit-interval="10"/>
+            </batch:tasklet>
+        </batch:step>
+    </batch:job>
+
+    <batch:job id="xmlTodbJob">
+        <batch:step id="step1">
+            <batch:tasklet transaction-manager="transactionManager">
+                <batch:chunk reader="xmlItemReader" writer="databaseItemWriter"
+                             processor="itemProcessor" commit-interval="10"/>
+            </batch:tasklet>
+        </batch:step>
+    </batch:job>
+
+    <batch:job id="dbToxmlJob">
+        <batch:step id="step2">
+            <batch:tasklet transaction-manager="transactionManager">
+                <batch:chunk reader="databaseItemReader" writer="xmlItemWriterLetturaDB"
+                             processor="itemProcessor" commit-interval="10"/>
+            </batch:tasklet>
+        </batch:step>
+    </batch:job>
+
+</beans>
