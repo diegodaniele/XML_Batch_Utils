@@ -77,7 +77,7 @@
     <properties>
         <springframework.version>4.0.6.RELEASE</springframework.version>
         <springbatch.version>3.0.1.RELEASE</springbatch.version>
-        <mysql.version>5.1.31</mysql.version>
+        <mysql.version>8.0.28</mysql.version>
     </properties>
 
     <dependencies>
